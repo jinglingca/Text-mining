@@ -1,2 +1,3 @@
 # Text-mining
-This file contains code and analysis result.
+This file contains code 
+Analysis result here<http://rpubs.com/jingling/156238>
