@@ -1,0 +1,207 @@
+---
+title: "Text file mining example"
+author: "Nan Zhang"
+date: "Oct. 14, 2015"
+output: html_document
+---
+
+
+### Loading the libraries which will be used in text file mining
+```{r loading libraries, echo=FALSE, warning=FALSE,message=FALSE,results='hide'}
+ Needed <- c("tm", "SnowballC", "RColorBrewer", "ggplot2", "wordcloud","MASS","grid","colorspace","lattice", "biclust", "cluster", "igraph", "fpc") 
+lapply(Needed,library, character.only = TRUE)
+```
+
+
+### import the text file into R as corpus
+```{r import the data, echo=FALSE}
+
+docs1 <- Corpus(DirSource("D:/study/text mining in R/Blog_Mining (1)/Blog_Mining/Data/Set 1")) 
+
+docs2 <- Corpus(DirSource("D:/study/text mining in R/Blog_Mining (1)/Blog_Mining/Data/Set 2"))
+
+# checking for the first corpus of text file
+summary(docs1)
+#inspect(docs1[2])
+# checking for the scond corpus of text file
+summary(docs2)
+#inspect(docs2[2])
+```
+
+### cleaning up the corpuses removing space ,stopword,url,punctuation, numbers
+```{r cleaning up all the imported corpuses,echo=FALSE}
+
+# remove the special signs
+cleansign<-function(docs){
+  for(j in seq(docs)){
+    docs[[j]] <- gsub("/", " ", docs[[j]])   
+    docs[[j]] <- gsub("@", " ", docs[[j]])   
+    docs[[j]] <- gsub("\\|", " ", docs[[j]])
+  } 
+  return(docs)
+}
+cleardocs1<-cleansign(docs1)
+cleardocs2<-cleansign(docs2)
+
+# remove all space, Punctuation, numbers, stopword, url
+removeURL <- function(x) gsub("http[[:alnum:]]*", "", x)
+cleantext<-function(docs){
+  docs <- tm_map(docs, tolower)
+  docs <- tm_map(docs, removePunctuation)
+  docs <- tm_map(docs, removeNumbers)
+  docs <- tm_map(docs, removeURL)
+  docs <- tm_map(docs, removeWords,stopwords("english"))
+  docs <- tm_map(docs,stripWhitespace)
+  return(docs)
+}
+cleardocs1<-cleantext(cleardocs1)
+cleardocs2<-cleantext(cleardocs2)
+
+```
+
+### translation the word into stem word
+
+```{r translation words into stem,echo=FALSE}
+cleardocs1Copy <- cleardocs1
+cleardocs2Copy <- cleardocs2
+
+translate_stem<-function(docs,docscopy){
+  
+  docs <- tm_map(docs, stemDocument)
+  docs <- tm_map(docs, stemCompletion, dictionary = docscopy)
+  return(docs)
+}
+
+translate_docs1<-translate_stem(cleardocs1,cleardocs1Copy)
+translate_docs2<-translate_stem(cleardocs2,cleardocs2Copy)
+
+```
+
+### Building a Term-Document Matrix
+```{r building a termp-document matrix}
+
+Tdm1 <- TermDocumentMatrix(translate_docs1, control=list(wordLengths=c(1,Inf)))
+Tdm1
+Tdm2 <- TermDocumentMatrix(translate_docs2, control=list(wordLengths=c(1,Inf)))
+Tdm2
+#checking for the docs1
+idx1 <- which(dimnames(Tdm1)$Terms == "able")
+inspect(Tdm1[idx1+(0:5),1:6])
+#checking for the docs2
+idx2 <- which(dimnames(Tdm2)$Terms == "abdomen")
+inspect(Tdm2[idx2+(0:5),1:3])
+```
+
+###Frequent Terms and Associations
+
+```{r frequent terms and associations}
+
+
+termFrequency1 <- rowSums(as.matrix(Tdm1))
+termFrequency_1 <- subset(termFrequency1, termFrequency1>=500)
+quantile(termFrequency1)
+
+
+
+termFrequency2 <- rowSums(as.matrix(Tdm2))
+
+#after barplot, i see will is not necessary in the data remove it
+#termFrequency2<-termFrequency2[which(!termFrequency2==2871)] maybe not need to remove
+
+termFrequency_2 <- subset(termFrequency2, termFrequency2>=500)
+quantile(termFrequency2)
+
+findFreqTerms(Tdm1,  lowfreq=450)
+findFreqTerms(Tdm2,  lowfreq=450)
+
+
+df1 <- data.frame(term = names(termFrequency_1), freq = termFrequency_1)
+ggplot(df1, aes(x=term, y=freq,fill=freq)) + geom_bar(stat = "identity") + xlab("Terms") + ylab("Count") +coord_flip()
+
+df2 <- data.frame(term = names(termFrequency_2), freq = termFrequency_2)
+ggplot(df2, aes(x=term, y=freq,fill=freq)) + geom_bar(stat = "identity") + xlab("Terms") + ylab("Count") +coord_flip()
+
+```
+
+
+
+###which words are associated with 'brand' and 'ro
+```{r association}
+findFreqTerms(Tdm1,  lowfreq=450)
+findFreqTerms(Tdm2,  lowfreq=450)
+findAssocs(Tdm1,'brand', 0.8)
+findAssocs(Tdm2,'robots', 0.8)
+
+```
+
+
+###Word Cloud
+```{r Word Cloud}
+set.seed(375)
+wordFreq1 <- sort(subset(termFrequency1, termFrequency1>=500), decreasing=TRUE)
+
+wordcloud(words=names(wordFreq1), freq=wordFreq1, min.freq=3, random.order=F,
+colors=rainbow(12))
+
+
+wordFreq2 <- sort(subset(termFrequency2, termFrequency2>=500), decreasing=TRUE)
+
+wordcloud(words=names(wordFreq2), freq=wordFreq2, min.freq=3, random.order=F,
+colors=rainbow(12))
+
+```
+
+### hierarchical Clustering Words
+```{r Clustering Words}
+
+Tdm1_den <- removeSparseTerms(Tdm1, sparse=0.4)
+m1 <- as.matrix(Tdm1_den)
+distMatrix1 <- dist(scale(m1))
+fit1 <- hclust(distMatrix1, method="ward.D2")
+plot(fit1)
+rect.hclust(fit1, k=6)
+(groups <- cutree(fit1, k=6))
+
+
+Tdm2_den <- removeSparseTerms(Tdm2, sparse=0.4)
+m2 <- as.matrix(Tdm2_den)
+distMatrix2 <- dist(scale(m2))
+fit2 <- hclust(distMatrix2, method="ward.D2")
+plot(fit2)
+rect.hclust(fit2, k=6)
+(groups <- cutree(fit2, k=6))
+```
+
+###k-means Algorithm
+```{r k-means Algorithm}
+set.seed(122)
+m1_T <- t(m1)
+k <- 5
+kmeansResult1 <- kmeans(m1_T, 5)
+round(kmeansResult1$centers, digits=3)
+
+for (i in 1:k) {
+  cat(paste("cluster ", i, ": ", sep=""))
+  s <- sort(kmeansResult1$centers[i,], decreasing=T)
+  cat(names(s)[1:3], "\n")
+}
+  
+
+m2_T <- t(m2)
+k <- 5
+kmeansResult2 <- kmeans(m2_T, 5)
+round(kmeansResult2$centers, digits=3)
+
+for (i in 1:k) {
+  cat(paste("cluster ", i, ": ", sep=""))
+  s <- sort(kmeansResult2$centers[i,], decreasing=T)
+  cat(names(s)[1:3], "\n")
+}
+
+
+```
+
+
+
+
+
